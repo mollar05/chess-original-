@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>정엽 체스 - 레이아웃 개선 버전</title>
+    <title>정엽 체스 - 전략 지능형 AI</title>
     <style>
         :root {
             --bg-color: #1a1a1a;
@@ -99,7 +99,6 @@
         .anti { background: #ff4500; color: white; }
         .neutral { background: #808080; color: white; }
 
-        /* 로그 컨테이너 우측 배치 */
         #log-container {
             width: 250px;
             height: 600px;
@@ -180,14 +179,14 @@
 </head>
 <body>
 
-<div id="status-msg">정엽 체스: 시스템 가동</div>
+<div id="status-msg">정엽 체스: 전술 엔진 초기화 중</div>
 
 <div id="main-layout">
     <div id="game-section">
         <div class="ui-panel">
             <div id="p1-info" class="faction-info">P1 (당신)</div>
             <div id="turn-count">턴 1</div>
-            <div id="p2-info" class="faction-info">AI (전술가)</div>
+            <div id="p2-info" class="faction-info">AI (그랜드마스터)</div>
         </div>
 
         <div id="game-container">
@@ -197,9 +196,9 @@
     </div>
 
     <div id="log-container">
-        <div id="log-header">실시간 대전 기록</div>
+        <div id="log-header">대전 로그</div>
         <div id="log">
-            <div class="log-entry">대전이 시작되었습니다.</div>
+            <div class="log-entry">시스템이 준비되었습니다.</div>
         </div>
     </div>
 </div>
@@ -207,9 +206,9 @@
 <div id="setup-overlay" class="overlay">
     <div class="box">
         <h2>세력 선택 (백)</h2>
-        <button class="faction-btn pro" onclick="selectFaction('pro')">친 정엽파 <span style="display:block; font-size:0.7rem; font-weight:normal;">무조건 이동 & 킹 증식!</span></button>
-        <button class="faction-btn anti" onclick="selectFaction('anti')">반 정엽파 <span style="display:block; font-size:0.7rem; font-weight:normal;">강력한 공격적 폰!</span></button>
-        <button class="faction-btn neutral" onclick="selectFaction('neutral')">중립파 <span style="display:block; font-size:0.7rem; font-weight:normal;">정통 체스 규칙.</span></button>
+        <button class="faction-btn pro" onclick="selectFaction('pro')">친 정엽파 <span style="display:block; font-size:0.7rem; font-weight:normal;">이동 자유 & 킹 증식</span></button>
+        <button class="faction-btn anti" onclick="selectFaction('anti')">반 정엽파 <span style="display:block; font-size:0.7rem; font-weight:normal;">폰 사거리 강화</span></button>
+        <button class="faction-btn neutral" onclick="selectFaction('neutral')">중립파 <span style="display:block; font-size:0.7rem; font-weight:normal;">전통적인 체스 룰</span></button>
     </div>
 </div>
 
@@ -237,7 +236,8 @@
     let lastMove = null; 
     let pendingPromotion = null;
     let factions = { white: '', black: 'neutral' };
-    let positionsEvaluated = 0;
+    
+    let boardHistory = {};
 
     const piecesEmoji = {
         white: { king: '♔', queen: '♕', rook: '♖', bishop: '♗', knight: '♘', pawn: '♙' },
@@ -264,17 +264,26 @@
         logEl.scrollTop = logEl.scrollHeight;
     }
 
+    function getBoardHash(b, currentTurn) {
+        let hash = "";
+        for(let r=0; r<8; r++) {
+            for(let c=0; c<8; c++) {
+                if(!b[r][c]) hash += ".";
+                else hash += b[r][c].color[0] + b[r][c].type[0];
+            }
+        }
+        return hash + currentTurn;
+    }
+
     function initBoard() {
         board = Array(8).fill(null).map(() => Array(8).fill(null));
+        boardHistory = {};
         const layout = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook'];
         for(let i=0; i<8; i++) {
             board[0][i] = { type: layout[i], color: 'black', moved: false };
             board[1][i] = { type: 'pawn', color: 'black', moved: false };
             board[6][i] = { type: 'pawn', color: 'white', moved: false };
             board[7][i] = { type: layout[i], color: 'white', moved: false };
-        }
-        if(factions.white === 'anti') {
-            for(let i=0; i<8; i++) { board[5][i] = board[6][i]; board[6][i] = null; }
         }
         draw();
     }
@@ -283,14 +292,12 @@
         const mainW = window.innerWidth * 0.95;
         const mainH = window.innerHeight * 0.7;
         const logC = document.getElementById('log-container');
-
         if (window.innerWidth > 850) {
             boardSize = Math.min(mainW - 270, mainH, 600);
             logC.style.height = `${boardSize + 60}px`;
         } else {
             boardSize = Math.min(mainW, mainH, 500);
         }
-        
         canvas.width = canvas.height = boardSize;
         tileSize = boardSize / 8;
         draw();
@@ -349,17 +356,25 @@
         const piece = b[r][c];
         let moves = [];
         const dir = piece.color === 'white' ? -1 : 1;
+
         if (piece.type === 'pawn') {
             if (r + dir >= 0 && r + dir < 8 && !b[r + dir][c]) {
                 moves.push({ r: r + dir, c });
-                const startRow = piece.color === 'white' ? (factions.white === 'anti' ? 5 : 6) : 1;
+                const startRow = piece.color === 'white' ? 6 : 1;
                 if (r === startRow && !b[r + 2 * dir][c]) moves.push({ r: r + 2 * dir, c });
             }
-            const atkOffsets = factions[piece.color] === 'anti' ? [-1, 1, -2, 2] : [-1, 1];
-            atkOffsets.forEach(dc => {
-                const nr = r + dir, nc = c + dc;
-                if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && b[nr][nc] && b[nr][nc].color !== piece.color) moves.push({ r: nr, c: nc, capture: true });
-            });
+            const attackRange = (factions[piece.color] === 'anti') ? 2 : 1;
+            for (let dist = 1; dist <= attackRange; dist++) {
+                const nr = r + (dir * dist);
+                if (nr < 0 || nr >= 8) continue;
+                [c - dist, c + dist].forEach(nc => {
+                    if (nc >= 0 && nc < 8) {
+                        if (b[nr][nc] && b[nr][nc].color !== piece.color) {
+                            moves.push({ r: nr, c: nc, capture: true });
+                        }
+                    }
+                });
+            }
         } else if (piece.type === 'rook') slide(r, c, [[0,1],[0,-1],[1,0],[-1,0]], moves, b);
         else if (piece.type === 'bishop') slide(r, c, [[1,1],[1,-1],[-1,1],[-1,-1]], moves, b);
         else if (piece.type === 'queen') slide(r, c, [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]], moves, b);
@@ -439,22 +454,68 @@
         return nb;
     }
 
+    // 평가 함수 고도화: 이동성 및 구조적 이점 포함
     function evaluateBoard(b) {
-        positionsEvaluated++;
         let score = 0, pc = 0;
+        let whitePieces = [], blackPieces = [];
+        
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
                 if (b[r][c]) {
-                    pc++; const p = b[r][c];
+                    pc++;
+                    const p = b[r][c];
                     let val = pieceValues[p.type];
+                    
+                    // PST 적용
                     let table = pst[p.type] || pst.pawn;
-                    if (p.type === 'king' && pc < 10) table = pst.kingEnd;
+                    if (p.type === 'king' && pc < 12) table = pst.kingEnd;
                     val += (p.color === 'white' ? table[7 - r][c] : table[r][c]);
-                    score += (p.color === 'black' ? val : -val);
+                    
+                    // 이동성(Mobility) 보너스: 무의미한 수를 방지하기 위해 이동 가능한 칸 수 측정
+                    // 단순화를 위해 RawMoves 개수를 사용 (너무 무거우면 성능 저하되므로 주의)
+                    const mobility = getRawMoves(r, c, b, true).length;
+                    val += mobility * 2; 
+
+                    if (p.color === 'black') {
+                        score += val;
+                        blackPieces.push({r, c, p});
+                    } else {
+                        score -= val;
+                        whitePieces.push({r, c, p});
+                    }
                 }
             }
         }
+        
+        // 반복 수 패널티 (이미 방문했던 보드 상태라면 점수 감점)
+        // 이 로직은 minimax 내부에서 처리하는 것이 더 정확하지만 여기서도 간단히 반영 가능
+        
         return score;
+    }
+
+    function quiescenceSearch(b, alpha, beta, isMax) {
+        let standPat = evaluateBoard(b);
+        if (isMax) {
+            if (standPat >= beta) return beta;
+            if (alpha < standPat) alpha = standPat;
+            const captures = getAllMoves(b, 'black').filter(m => m.to.capture);
+            for (const m of captures) {
+                let score = quiescenceSearch(simulateMove(m.fr, m.fc, m.tr, m.tc, m.to, b), alpha, beta, false);
+                if (score >= beta) return beta;
+                if (score > alpha) alpha = score;
+            }
+            return alpha;
+        } else {
+            if (standPat <= alpha) return alpha;
+            if (beta > standPat) beta = standPat;
+            const captures = getAllMoves(b, 'white').filter(m => m.to.capture);
+            for (const m of captures) {
+                let score = quiescenceSearch(simulateMove(m.fr, m.fc, m.tr, m.tc, m.to, b), alpha, beta, true);
+                if (score <= alpha) return alpha;
+                if (score < beta) beta = score;
+            }
+            return beta;
+        }
     }
 
     function getAllMoves(b, color) {
@@ -464,7 +525,17 @@
                 if (b[r][c] && b[r][c].color === color) {
                     getLegalMoves(r, c, b).forEach(m => {
                         let pri = 0;
-                        if(m.capture) pri = 10 * pieceValues[b[m.r][m.c].type] - pieceValues[b[r][c].type];
+                        // 기물 잡기 우선순위 (MVV-LVA)
+                        if(m.capture) {
+                            pri = 100 * pieceValues[b[m.r][m.c].type] - pieceValues[b[r][c].type];
+                        }
+                        
+                        // 현재 보드 상태가 과거에 있었다면 점수 대폭 삭감 (무의미한 반복 방지)
+                        const hash = getBoardHash(simulateMove(r, c, m.r, m.c, m, b), color === 'black' ? 'white' : 'black');
+                        if (boardHistory[hash]) {
+                            pri -= 500 * boardHistory[hash]; 
+                        }
+                        
                         ms.push({ fr: r, fc: c, tr: m.r, tc: m.c, to: m, priority: pri });
                     });
                 }
@@ -474,13 +545,19 @@
     }
 
     function minimax(b, depth, alpha, beta, isMax) {
-        if (depth === 0) return evaluateBoard(b);
+        if (depth === 0) return quiescenceSearch(b, alpha, beta, isMax);
+        
         const ms = getAllMoves(b, isMax ? 'black' : 'white');
-        if (ms.length === 0) return isCheck(isMax ? 'black' : 'white', b) ? (isMax ? -30000 : 30000) : 0;
+        if (ms.length === 0) {
+            if (isCheck(isMax ? 'black' : 'white', b)) return isMax ? -30000 : 30000;
+            return 0;
+        }
+
         if (isMax) {
             let maxEv = -Infinity;
             for (const m of ms) {
-                maxEv = Math.max(maxEv, minimax(simulateMove(m.fr, m.fc, m.tr, m.tc, m.to, b), depth - 1, alpha, beta, false));
+                const ev = minimax(simulateMove(m.fr, m.fc, m.tr, m.tc, m.to, b), depth - 1, alpha, beta, false);
+                maxEv = Math.max(maxEv, ev);
                 alpha = Math.max(alpha, maxEv);
                 if (beta <= alpha) break;
             }
@@ -488,7 +565,8 @@
         } else {
             let minEv = Infinity;
             for (const m of ms) {
-                minEv = Math.min(minEv, minimax(simulateMove(m.fr, m.fc, m.tr, m.tc, m.to, b), depth - 1, alpha, beta, true));
+                const ev = minimax(simulateMove(m.fr, m.fc, m.tr, m.tc, m.to, b), depth - 1, alpha, beta, true);
+                minEv = Math.min(minEv, ev);
                 beta = Math.min(beta, minEv);
                 if (beta <= alpha) break;
             }
@@ -500,23 +578,46 @@
         if (gameOver) return;
         const pms = getAllMoves(board, 'black');
         if (pms.length === 0) { checkGameOver(); return; }
-        statusEl.innerText = "AI 분석 중...";
-        let bestS = -Infinity, bestM = null;
+        statusEl.innerText = "최적의 경로 계산 중...";
+        
+        let bestS = -Infinity;
+        let bestMoves = [];
+        
+        let pieceCount = 0;
+        board.forEach(row => row.forEach(p => { if(p) pieceCount++; }));
+        const searchDepth = pieceCount < 10 ? 4 : (pieceCount < 16 ? 3 : 2);
+
         for (let i = 0; i < pms.length; i++) {
-            const ev = minimax(simulateMove(pms[i].fr, pms[i].fc, pms[i].tr, pms[i].tc, pms[i].to, board), 2, -Infinity, Infinity, false);
-            if (ev > bestS) { bestS = ev; bestM = pms[i]; }
-            thinkingBar.style.width = `${((i+1) / pms.length) * 100}%`;
-        }
-        setTimeout(() => {
-            thinkingBar.style.width = "0%";
-            if (bestM) {
-                addLog(`흑색: ${String.fromCharCode(97+bestM.fc)}${8-bestM.fr} → ${String.fromCharCode(97+bestM.tc)}${8-bestM.tr}`);
-                executeMove(bestM.fr, bestM.fc, bestM.tr, bestM.tc, bestM.to);
+            const ev = minimax(simulateMove(pms[i].fr, pms[i].fc, pms[i].tr, pms[i].tc, pms[i].to, board), searchDepth, -Infinity, Infinity, false);
+            
+            if (ev > bestS) {
+                bestS = ev;
+                bestMoves = [pms[i]];
+            } else if (ev === bestS) {
+                bestMoves.push(pms[i]);
             }
-        }, 200);
+            thinkingBar.style.width = `${((i+1) / pms.length) * 100}%`;
+            
+            // UI 업데이트를 위한 비동기 휴식 (너무 빠르면 안보임)
+            if (i % 5 === 0) await new Promise(r => setTimeout(r, 0));
+        }
+        
+        thinkingBar.style.width = "0%";
+        const bestM = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+        if (bestM) {
+            addLog(`흑색: ${String.fromCharCode(97+bestM.fc)}${8-bestM.fr} → ${String.fromCharCode(97+bestM.tc)}${8-bestM.tr}`);
+            executeMove(bestM.fr, bestM.fc, bestM.tr, bestM.tc, bestM.to);
+        }
     }
 
     function checkGameOver() {
+        const currentHash = getBoardHash(board, turn);
+        if (boardHistory[currentHash] >= 3) {
+            gameOver = true;
+            addLog("게임 종료: 무의미한 반복으로 인한 무승부");
+            setTimeout(() => alert("3회 반복으로 인한 무승부입니다."), 100);
+            return true;
+        }
         if (getAllMoves(board, turn).length === 0) {
             gameOver = true;
             const msg = isCheck(turn, board) ? `체크메이트! ${turn === 'white' ? '흑' : '백'} 승리` : "스테일메이트 (무승부)";
@@ -530,11 +631,18 @@
     function executeMove(fr, fc, tr, tc, m) {
         const p = board[fr][fc];
         lastMove = { from: { r: fr, c: fc }, to: { r: tr, c: tc }, piece: p };
+        
         if (m && m.special === 'castle') {
             if (tc === 6) { board[fr][5] = board[fr][7]; board[fr][7] = null; }
             if (tc === 2) { board[fr][3] = board[fr][0]; board[fr][0] = null; }
         }
+        
         board[tr][tc] = p; board[tr][tc].moved = true; board[fr][fc] = null;
+        
+        // 보드 역사 기록 (반복수 감지용)
+        const hash = getBoardHash(board, turn === 'white' ? 'black' : 'white');
+        boardHistory[hash] = (boardHistory[hash] || 0) + 1;
+        
         if (p.type === 'pawn' && (tr === 0 || tr === 7)) {
             if (p.color === 'black') { board[tr][tc].type = 'queen'; nextTurn(); }
             else showPromotion(tr, tc);
@@ -544,17 +652,17 @@
     function nextTurn() {
         turn = turn === 'white' ? 'black' : 'white';
         if (turn === 'white') turnCounter++;
+        updateUI(); draw();
         if(!checkGameOver()) {
-            updateUI(); draw();
             if (turn === 'black') setTimeout(makeBestMove, 300);
-        } else { updateUI(); draw(); }
+        }
     }
 
     function updateUI() {
         document.getElementById('turn-count').innerText = `턴 ${turnCounter}`;
         document.getElementById('p1-info').classList.toggle('active-turn', turn === 'white');
         document.getElementById('p2-info').classList.toggle('active-turn', turn === 'black');
-        statusEl.innerText = isCheck(turn, board) ? "⚠️ 체크(Check)!" : (turn === 'white' ? "당신의 차례" : "AI 차례");
+        statusEl.innerText = isCheck(turn, board) ? "⚠️ 위기! 체크 상태" : (turn === 'white' ? "전술을 선택하세요" : "AI가 최선의 수를 찾는 중...");
     }
 
     function showPromotion(r, c) {
@@ -579,8 +687,8 @@
         const r = Math.floor((e.clientY - rect.top) * (8 / rect.height));
         const c = Math.floor((e.clientX - rect.left) * (8 / rect.width));
         const move = validMoves.find(m => m.r === r && m.c === c);
+        
         if (selectedTile && move) {
-            addLog(`백색: ${String.fromCharCode(97+selectedTile.c)}${8-selectedTile.r} → ${String.fromCharCode(97+c)}${8-r}`);
             executeMove(selectedTile.r, selectedTile.c, r, c, move);
             selectedTile = null; validMoves = [];
         } else if (board[r][c] && board[r][c].color === 'white') {
