@@ -3,22 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>정엽 체스 - 전략 지능형 AI</title>
+    <title>정엽 체스 - 상급자 전술 엔진 v2</title>
     <style>
         :root {
-            --bg-color: #1a1a1a;
-            --board-light: #ebecd0;
-            --board-dark: #779556;
+            --bg-color: #121212;
+            --board-light: #f0d9b5;
+            --board-dark: #b58863;
             --highlight: rgba(255, 255, 0, 0.4);
-            --last-move: rgba(155, 199, 0, 0.4);
-            --check-color: rgba(255, 0, 0, 0.6);
-            --panel-bg: #2a2a2a;
+            --last-move: rgba(155, 199, 0, 0.5);
+            --check-color: rgba(255, 0, 0, 0.7);
+            --panel-bg: #1e1e1e;
+            --accent: #ffd700;
         }
 
         body {
             margin: 0; padding: 0;
             background-color: var(--bg-color);
-            color: white;
+            color: #e0e0e0;
             font-family: 'Pretendard', system-ui, sans-serif;
             display: flex;
             flex-direction: column;
@@ -35,19 +36,13 @@
             align-items: flex-start;
             justify-content: center;
             gap: 20px;
-            width: 95vw;
-            max-width: 1000px;
+            width: 98vw;
+            max-width: 1100px;
         }
 
-        @media (max-width: 850px) {
-            #main-layout {
-                flex-direction: column;
-                align-items: center;
-            }
-            #log-container {
-                width: 100% !important;
-                height: 120px !important;
-            }
+        @media (max-width: 900px) {
+            #main-layout { flex-direction: column; align-items: center; }
+            #log-container { width: 100% !important; height: 140px !important; }
         }
 
         #game-section {
@@ -60,121 +55,87 @@
         #game-container {
             position: relative;
             width: 100%;
-            max-width: 600px;
+            max-width: 550px;
             aspect-ratio: 1/1;
+            border: 5px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
         }
 
-        canvas {
-            width: 100%; height: 100%;
-            display: block;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.7);
-            border-radius: 4px;
-            cursor: pointer;
-        }
+        canvas { width: 100%; height: 100%; display: block; cursor: pointer; }
 
         .ui-panel {
             width: 100%;
-            padding: 10px 0;
+            padding: 15px 0;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-sizing: border-box;
         }
 
         #status-msg {
-            font-size: 1.2rem; font-weight: 800;
-            margin: 5px 0; text-align: center; color: #ffd700;
-            height: 1.5em;
+            font-size: 1.3rem; font-weight: 800;
+            margin-bottom: 10px; text-align: center; color: var(--accent);
+            text-shadow: 0 0 10px rgba(255,215,0,0.3);
         }
 
         .faction-info {
-            padding: 6px 12px; border-radius: 6px;
-            font-size: 0.85rem; font-weight: bold;
-            transition: all 0.3s ease;
-            background: #333;
+            padding: 8px 16px; border-radius: 8px;
+            font-size: 0.9rem; font-weight: bold;
+            background: #2a2a2a; border: 1px solid #444;
         }
 
-        .active-turn { outline: 3px solid #00ff00; transform: scale(1.05); }
-        .pro { background: #ffd700; color: black; }
-        .anti { background: #ff4500; color: white; }
-        .neutral { background: #808080; color: white; }
+        .active-turn { border-color: #00ff00; box-shadow: 0 0 10px rgba(0,255,0,0.2); color: #fff; }
 
         #log-container {
-            width: 250px;
-            height: 600px;
+            width: 280px;
+            height: 550px;
             background: var(--panel-bg);
             border-radius: 10px;
             display: flex;
             flex-direction: column;
-            border: 1px solid #444;
-            overflow: hidden;
+            border: 1px solid #333;
         }
 
         #log-header {
-            background: #333;
-            padding: 10px;
-            font-size: 0.9rem;
-            font-weight: bold;
-            text-align: center;
-            border-bottom: 1px solid #444;
+            background: #252525; padding: 12px;
+            font-size: 0.9rem; font-weight: bold; text-align: center;
+            border-bottom: 1px solid #333;
         }
 
         #log {
-            flex: 1;
-            padding: 10px;
-            font-size: 0.85rem;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column-reverse;
-            gap: 5px;
+            flex: 1; padding: 10px; font-size: 0.85rem;
+            overflow-y: auto; display: flex; flex-direction: column-reverse; gap: 6px;
         }
 
-        .log-entry {
-            padding: 4px 8px;
-            border-radius: 4px;
-            background: rgba(255,255,255,0.05);
-            animation: fadeIn 0.3s ease;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(5px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        .log-entry { padding: 6px 10px; border-radius: 4px; background: rgba(255,255,255,0.03); border-left: 3px solid transparent; }
+        .log-entry.white { border-left-color: #eee; }
+        .log-entry.black { border-left-color: var(--accent); }
 
         .overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85);
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            z-index: 1000;
-            backdrop-filter: blur(5px);
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center;
+            z-index: 1000; backdrop-filter: blur(8px);
         }
 
         .box {
-            background: #2a2a2a; padding: 25px;
-            border-radius: 15px; text-align: center;
-            max-width: 85%; border: 1px solid #444;
+            background: #222; padding: 30px; border-radius: 20px;
+            text-align: center; border: 1px solid #444; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
         }
 
         .faction-btn {
-            display: block; width: 100%; padding: 15px;
-            margin: 10px 0; border: none; border-radius: 10px;
-            font-size: 1rem; font-weight: bold; cursor: pointer;
+            display: block; width: 250px; padding: 18px; margin: 12px auto;
+            border: 1px solid #555; border-radius: 12px; color: white;
+            font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: all 0.2s;
+            background: #333;
         }
+        .faction-btn:hover { transform: translateY(-2px); background: #444; border-color: var(--accent); }
+        .pro { color: var(--accent); }
+        .anti { color: #ff4d4d; }
 
-        #promotion-overlay { display: none; }
-        .promo-options { display: flex; gap: 10px; margin-top: 15px; justify-content: center; }
-        .promo-btn {
-            background: #444; color: white; border: none; padding: 12px;
-            border-radius: 8px; font-size: 1.8rem; cursor: pointer;
+        #thinking-bar-container {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 4px; background: rgba(255,255,255,0.1);
         }
-
-        #thinking-bar {
-            position: absolute; bottom: 0; left: 0;
-            height: 4px; background: #00ff00; width: 0%;
-            transition: width 0.1s;
-        }
+        #thinking-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.2s; }
     </style>
 </head>
 <body>
@@ -184,38 +145,39 @@
 <div id="main-layout">
     <div id="game-section">
         <div class="ui-panel">
-            <div id="p1-info" class="faction-info">P1 (당신)</div>
-            <div id="turn-count">턴 1</div>
-            <div id="p2-info" class="faction-info">AI (그랜드마스터)</div>
+            <div id="p1-info" class="faction-info">플레이어</div>
+            <div id="turn-count" style="font-weight: bold; opacity: 0.7;">ROUND 1</div>
+            <div id="p2-info" class="faction-info">AI 엔진</div>
         </div>
 
         <div id="game-container">
             <canvas id="chessBoard"></canvas>
-            <div id="thinking-bar"></div>
+            <div id="thinking-bar-container">
+                <div id="thinking-bar"></div>
+            </div>
         </div>
     </div>
 
     <div id="log-container">
-        <div id="log-header">대전 로그</div>
-        <div id="log">
-            <div class="log-entry">시스템이 준비되었습니다.</div>
-        </div>
+        <div id="log-header">대전 전술 로그</div>
+        <div id="log"></div>
     </div>
 </div>
 
 <div id="setup-overlay" class="overlay">
     <div class="box">
-        <h2>세력 선택 (백)</h2>
-        <button class="faction-btn pro" onclick="selectFaction('pro')">친 정엽파 <span style="display:block; font-size:0.7rem; font-weight:normal;">이동 자유 & 킹 증식</span></button>
-        <button class="faction-btn anti" onclick="selectFaction('anti')">반 정엽파 <span style="display:block; font-size:0.7rem; font-weight:normal;">폰 사거리 강화</span></button>
-        <button class="faction-btn neutral" onclick="selectFaction('neutral')">중립파 <span style="display:block; font-size:0.7rem; font-weight:normal;">전통적인 체스 룰</span></button>
+        <h2 style="margin-top:0; color:var(--accent);">세력 선택</h2>
+        <p style="color:#aaa; margin-bottom:20px;">특수 능력을 가진 세력을 선택하세요.</p>
+        <button class="faction-btn pro" onclick="selectFaction('pro')">친 정엽파 (이동 자유)</button>
+        <button class="faction-btn anti" onclick="selectFaction('anti')">반 정엽파 (폰 사거리)</button>
+        <button class="faction-btn neutral" onclick="selectFaction('neutral')">중립파 (오리지널)</button>
     </div>
 </div>
 
-<div id="promotion-overlay" class="overlay">
+<div id="promotion-overlay" class="overlay" style="display:none;">
     <div class="box">
         <h3>승급 기물 선택</h3>
-        <div class="promo-options" id="promo-list"></div>
+        <div id="promo-list" style="display:flex; gap:15px; justify-content:center; margin-top:20px;"></div>
     </div>
 </div>
 
@@ -236,8 +198,11 @@
     let lastMove = null; 
     let pendingPromotion = null;
     let factions = { white: '', black: 'neutral' };
-    
     let boardHistory = {};
+    
+    // AI 최적화를 위한 킬러 무브 및 히스토리 테이블
+    let killerMoves = Array(20).fill(null).map(() => []);
+    let historyTable = {};
 
     const piecesEmoji = {
         white: { king: '♔', queen: '♕', rook: '♖', bishop: '♗', knight: '♘', pawn: '♙' },
@@ -246,38 +211,30 @@
 
     const pieceValues = { king: 20000, queen: 950, rook: 500, bishop: 335, knight: 325, pawn: 100 };
 
+    // Piece-Square Tables (PST) - 기물별 최적 위치 가중치
     const pst = {
         pawn: [[0,0,0,0,0,0,0,0],[50,50,50,50,50,50,50,50],[10,10,20,30,30,20,10,10],[5,5,10,25,25,10,5,5],[0,0,0,20,20,0,0,0],[5,-5,-10,0,0,-10,-5,5],[5,10,10,-20,-20,10,10,5],[0,0,0,0,0,0,0,0]],
         knight: [[-50,-40,-30,-30,-30,-30,-40,-50],[-40,-20,0,0,0,0,-20,-40],[-30,0,10,15,15,10,0,-30],[-30,5,15,20,20,15,5,-30],[-30,0,15,20,20,15,0,-30],[-30,5,10,15,15,10,5,-30],[-40,-20,0,5,5,0,-20,-40],[-50,-40,-30,-30,-30,-30,-40,-50]],
         bishop: [[-20,-10,-10,-10,-10,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,10,10,5,0,-10],[-10,5,5,10,10,5,5,-10],[-10,0,10,10,10,10,0,-10],[-10,10,10,10,10,10,10,-10],[-10,5,0,0,0,0,5,-10],[-20,-10,-10,-10,-10,-10,-10,-20]],
-        rook: [[0,0,0,0,0,0,0,0],[5,10,10,10,10,10,10,5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[0,0,0,5,5,0,0,0]],
+        rook: [[0,0,0,5,5,0,0,0], [5,10,10,10,10,10,10,5], [-5,0,0,0,0,0,0,-5], [-5,0,0,0,0,0,0,-5], [-5,0,0,0,0,0,0,-5], [-5,0,0,0,0,0,0,-5], [-5,0,0,0,0,0,0,-5], [0,0,0,2,2,0,0,0]],
         queen: [[-20,-10,-10,-5,-5,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,5,5,5,0,-10],[-5,0,5,5,5,5,0,-5],[0,0,5,5,5,5,0,-5],[-10,5,5,5,5,5,0,-10],[-10,0,5,0,0,0,0,-10],[-20,-10,-10,-5,-5,-10,-10,-20]],
         king: [[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-20,-30,-30,-40,-40,-30,-30,-20],[-10,-20,-20,-20,-20,-20,-20,-10],[20,20,0,0,0,0,20,20],[20,30,10,0,0,10,30,20]],
         kingEnd: [[-50,-40,-30,-20,-20,-30,-40,-50],[-30,-20,-10,0,0,-10,-20,-30],[-30,-10,20,30,30,20,-10,-30],[-30,-10,30,40,40,30,-10,-30],[-30,-10,30,40,40,30,-10,-30],[-30,-10,20,30,30,20,-10,-30],[-30,-30,0,0,0,0,-30,-30],[-50,-30,-30,-30,-30,-30,-30,-50]]
     };
 
-    function addLog(msg) {
+    function addLog(msg, side) {
         const div = document.createElement('div');
-        div.className = 'log-entry';
+        div.className = `log-entry ${side}`;
         div.innerText = msg;
         logEl.appendChild(div);
         logEl.scrollTop = logEl.scrollHeight;
     }
 
-    function getBoardHash(b, currentTurn) {
-        let hash = "";
-        for(let r=0; r<8; r++) {
-            for(let c=0; c<8; c++) {
-                if(!b[r][c]) hash += ".";
-                else hash += b[r][c].color[0] + b[r][c].type[0];
-            }
-        }
-        return hash + currentTurn;
-    }
-
     function initBoard() {
         board = Array(8).fill(null).map(() => Array(8).fill(null));
         boardHistory = {};
+        killerMoves = Array(20).fill(null).map(() => []);
+        historyTable = {};
         const layout = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook'];
         for(let i=0; i<8; i++) {
             board[0][i] = { type: layout[i], color: 'black', moved: false };
@@ -285,19 +242,25 @@
             board[6][i] = { type: 'pawn', color: 'white', moved: false };
             board[7][i] = { type: layout[i], color: 'white', moved: false };
         }
+        addLog("게임이 시작되었습니다. 행운을 빕니다!", "white");
         draw();
     }
 
-    function resize() {
-        const mainW = window.innerWidth * 0.95;
-        const mainH = window.innerHeight * 0.7;
-        const logC = document.getElementById('log-container');
-        if (window.innerWidth > 850) {
-            boardSize = Math.min(mainW - 270, mainH, 600);
-            logC.style.height = `${boardSize + 60}px`;
-        } else {
-            boardSize = Math.min(mainW, mainH, 500);
+    function getBoardHash(b, currentTurn) {
+        let s = currentTurn[0];
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const p = b[r][c];
+                if (!p) s += '.';
+                else s += (p.color === 'white' ? p.type[0].toUpperCase() : p.type[0].toLowerCase());
+            }
         }
+        return s;
+    }
+
+    function resize() {
+        const containerW = document.getElementById('game-container').clientWidth;
+        boardSize = containerW;
         canvas.width = canvas.height = boardSize;
         tileSize = boardSize / 8;
         draw();
@@ -306,87 +269,89 @@
     function selectFaction(f) {
         factions.white = f;
         document.getElementById('setup-overlay').style.display = 'none';
-        document.getElementById('p1-info').innerText = `당신: ${f === 'pro' ? '친정엽' : f === 'anti' ? '반정엽' : '중립'}`;
-        document.getElementById('p1-info').className = `faction-info ${f}`;
+        document.getElementById('p1-info').innerText = f === 'pro' ? '친정엽파' : f === 'anti' ? '반정엽파' : '중립파';
         initBoard();
         updateUI();
     }
 
     function draw() {
-        if (!board || board.length < 8) return;
+        if (!board.length) return;
         ctx.clearRect(0, 0, boardSize, boardSize);
         const currentInCheck = isCheck(turn, board);
+        
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
-                ctx.fillStyle = (r + c) % 2 === 0 ? '#ebecd0' : '#779556';
+                ctx.fillStyle = (r + c) % 2 === 0 ? '#f0d9b5' : '#b58863';
                 ctx.fillRect(c * tileSize, r * tileSize, tileSize, tileSize);
+                
                 if (lastMove && ((lastMove.from.r === r && lastMove.from.c === c) || (lastMove.to.r === r && lastMove.to.c === c))) {
                     ctx.fillStyle = 'rgba(155, 199, 0, 0.4)';
                     ctx.fillRect(c * tileSize, r * tileSize, tileSize, tileSize);
                 }
+                
                 if (selectedTile && selectedTile.r === r && selectedTile.c === c) {
                     ctx.fillStyle = 'rgba(255, 255, 0, 0.4)';
                     ctx.fillRect(c * tileSize, r * tileSize, tileSize, tileSize);
                 }
-                const piece = board[r][c];
-                if (piece) {
-                    if (piece.type === 'king' && piece.color === turn && currentInCheck) {
-                        ctx.fillStyle = 'rgba(255, 0, 0, 0.6)';
+
+                const p = board[r][c];
+                if (p) {
+                    if (p.type === 'king' && p.color === turn && currentInCheck) {
+                        ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
                         ctx.beginPath();
-                        ctx.arc((c + 0.5) * tileSize, (r + 0.5) * tileSize, tileSize * 0.45, 0, Math.PI * 2);
+                        ctx.arc((c + 0.5) * tileSize, (r + 0.5) * tileSize, tileSize * 0.4, 0, Math.PI * 2);
                         ctx.fill();
                     }
                     ctx.fillStyle = '#000';
-                    ctx.font = `${tileSize * 0.8}px serif`;
+                    ctx.font = `${tileSize * 0.75}px serif`;
                     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                    ctx.fillText(piecesEmoji[piece.color][piece.type], (c + 0.5) * tileSize, (r + 0.5) * tileSize);
+                    ctx.fillText(piecesEmoji[p.color][p.type], (c + 0.5) * tileSize, (r + 0.5) * tileSize);
                 }
             }
         }
+        
         validMoves.forEach(m => {
             ctx.beginPath();
-            ctx.arc((m.c + 0.5) * tileSize, (m.r + 0.5) * tileSize, tileSize * 0.15, 0, Math.PI * 2);
-            ctx.fillStyle = m.capture ? 'rgba(255, 0, 0, 0.4)' : 'rgba(0,0,0,0.2)';
+            ctx.arc((m.c + 0.5) * tileSize, (m.r + 0.5) * tileSize, tileSize * 0.12, 0, Math.PI * 2);
+            ctx.fillStyle = m.capture ? 'rgba(255, 0, 0, 0.3)' : 'rgba(0,0,0,0.15)';
             ctx.fill();
         });
     }
 
-    function getRawMoves(r, c, b = board, skipCastling = false) {
-        if (!b[r] || !b[r][c]) return [];
-        const piece = b[r][c];
+    function getRawMoves(r, c, b, skipCastling = false) {
+        if (!b[r][c]) return [];
+        const p = b[r][c];
         let moves = [];
-        const dir = piece.color === 'white' ? -1 : 1;
+        const dir = p.color === 'white' ? -1 : 1;
 
-        if (piece.type === 'pawn') {
+        if (p.type === 'pawn') {
             if (r + dir >= 0 && r + dir < 8 && !b[r + dir][c]) {
                 moves.push({ r: r + dir, c });
-                const startRow = piece.color === 'white' ? 6 : 1;
+                const startRow = p.color === 'white' ? 6 : 1;
                 if (r === startRow && !b[r + 2 * dir][c]) moves.push({ r: r + 2 * dir, c });
             }
-            const attackRange = (factions[piece.color] === 'anti') ? 2 : 1;
-            for (let dist = 1; dist <= attackRange; dist++) {
-                const nr = r + (dir * dist);
+            const range = (factions[p.color] === 'anti') ? 2 : 1;
+            for (let d = 1; d <= range; d++) {
+                const nr = r + (dir * d);
                 if (nr < 0 || nr >= 8) continue;
-                [c - dist, c + dist].forEach(nc => {
-                    if (nc >= 0 && nc < 8) {
-                        if (b[nr][nc] && b[nr][nc].color !== piece.color) {
-                            moves.push({ r: nr, c: nc, capture: true });
-                        }
+                [c - d, c + d].forEach(nc => {
+                    if (nc >= 0 && nc < 8 && b[nr][nc] && b[nr][nc].color !== p.color) {
+                        moves.push({ r: nr, c: nc, capture: true });
                     }
                 });
             }
-        } else if (piece.type === 'rook') slide(r, c, [[0,1],[0,-1],[1,0],[-1,0]], moves, b);
-        else if (piece.type === 'bishop') slide(r, c, [[1,1],[1,-1],[-1,1],[-1,-1]], moves, b);
-        else if (piece.type === 'queen') slide(r, c, [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]], moves, b);
-        else if (piece.type === 'knight') jump(r, c, [[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]], moves, b);
-        else if (piece.type === 'king') {
+        } else if (p.type === 'rook') slide(r, c, [[0,1],[0,-1],[1,0],[-1,0]], moves, b);
+        else if (p.type === 'bishop') slide(r, c, [[1,1],[1,-1],[-1,1],[-1,-1]], moves, b);
+        else if (p.type === 'queen') slide(r, c, [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]], moves, b);
+        else if (p.type === 'knight') jump(r, c, [[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]], moves, b);
+        else if (p.type === 'king') {
             jump(r, c, [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]], moves, b);
-            if (!skipCastling && !piece.moved && !isCheck(piece.color, b)) {
+            if (!skipCastling && !p.moved && !isCheck(p.color, b)) {
                 if (b[r][7] && b[r][7].type === 'rook' && !b[r][7].moved && !b[r][5] && !b[r][6]) {
-                    if (!isSquareAttacked(piece.color, b, r, 5) && !isSquareAttacked(piece.color, b, r, 6)) moves.push({ r, c: 6, special: 'castle' });
+                    if (!isSquareAttacked(p.color, b, r, 5) && !isSquareAttacked(p.color, b, r, 6)) moves.push({ r, c: 6, special: 'castle' });
                 }
                 if (b[r][0] && b[r][0].type === 'rook' && !b[r][0].moved && !b[r][1] && !b[r][2] && !b[r][3]) {
-                    if (!isSquareAttacked(piece.color, b, r, 3) && !isSquareAttacked(piece.color, b, r, 2)) moves.push({ r, c: 2, special: 'castle' });
+                    if (!isSquareAttacked(p.color, b, r, 3) && !isSquareAttacked(p.color, b, r, 2)) moves.push({ r, c: 2, special: 'castle' });
                 }
             }
         }
@@ -415,14 +380,6 @@
         });
     }
 
-    function getLegalMoves(r, c, b) {
-        if (!b[r][c]) return [];
-        const p = b[r][c];
-        const raw = getRawMoves(r, c, b);
-        if (factions[p.color] === 'pro') return raw; 
-        return raw.filter(m => !isCheck(p.color, simulateMove(r, c, m.r, m.c, m, b)));
-    }
-
     function isSquareAttacked(myColor, b, tr, tc) {
         const opp = myColor === 'white' ? 'black' : 'white';
         for (let r = 0; r < 8; r++) {
@@ -439,14 +396,20 @@
     function isCheck(color, b) {
         let kings = [];
         for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (b[r][c] && b[r][c].type === 'king' && b[r][c].color === color) kings.push({r, c});
-        if (kings.length === 0) return false;
         return kings.some(k => isSquareAttacked(color, b, k.r, k.c));
+    }
+
+    function getLegalMoves(r, c, b) {
+        const p = b[r][c];
+        const raw = getRawMoves(r, c, b);
+        if (factions[p.color] === 'pro') return raw; 
+        return raw.filter(m => !isCheck(p.color, simulateMove(r, c, m.r, m.c, m, b)));
     }
 
     function simulateMove(fr, fc, tr, tc, m, b) {
         const nb = b.map(row => row ? [...row] : Array(8).fill(null));
-        const p = {...nb[fr][fc]};
-        nb[tr][tc] = p; nb[fr][fc] = null;
+        nb[tr][tc] = {...nb[fr][fc]};
+        nb[fr][fc] = null;
         if (m && m.special === 'castle') {
             if (tc === 6) { nb[fr][5] = {...nb[fr][7]}; nb[fr][7] = null; }
             if (tc === 2) { nb[fr][3] = {...nb[fr][0]}; nb[fr][0] = null; }
@@ -454,45 +417,48 @@
         return nb;
     }
 
-    // 평가 함수 고도화: 이동성 및 구조적 이점 포함
+    // AI 엔진: 평가 함수 개선
     function evaluateBoard(b) {
-        let score = 0, pc = 0;
-        let whitePieces = [], blackPieces = [];
-        
+        let score = 0;
+        let whitePieces = 0;
+        let blackPieces = 0;
+        let whiteMobility = 0;
+        let blackMobility = 0;
+
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
-                if (b[r][c]) {
-                    pc++;
-                    const p = b[r][c];
-                    let val = pieceValues[p.type];
-                    
-                    // PST 적용
-                    let table = pst[p.type] || pst.pawn;
-                    if (p.type === 'king' && pc < 12) table = pst.kingEnd;
-                    val += (p.color === 'white' ? table[7 - r][c] : table[r][c]);
-                    
-                    // 이동성(Mobility) 보너스: 무의미한 수를 방지하기 위해 이동 가능한 칸 수 측정
-                    // 단순화를 위해 RawMoves 개수를 사용 (너무 무거우면 성능 저하되므로 주의)
-                    const mobility = getRawMoves(r, c, b, true).length;
-                    val += mobility * 2; 
+                const p = b[r][c];
+                if (!p) continue;
+                
+                if (p.color === 'white') whitePieces++; else blackPieces++;
+                
+                let val = pieceValues[p.type];
+                let isEndgame = (whitePieces + blackPieces) < 12;
+                
+                let table = pst[p.type] || pst.pawn;
+                if (p.type === 'king' && isEndgame) table = pst.kingEnd;
+                
+                const posBonus = (p.color === 'white' ? table[7-r][c] : table[r][c]);
+                val += posBonus;
 
-                    if (p.color === 'black') {
-                        score += val;
-                        blackPieces.push({r, c, p});
-                    } else {
-                        score -= val;
-                        whitePieces.push({r, c, p});
-                    }
+                // 기물 활동성 점수 추가
+                const moves = getRawMoves(r, c, b, true);
+                if (p.color === 'white') whiteMobility += moves.length; else blackMobility += moves.length;
+
+                // 공격받는 기물에 대한 페널티
+                if (isSquareAttacked(p.color === 'white' ? 'black' : 'white', b, r, c)) {
+                    val -= (pieceValues[p.type] * 0.2); 
                 }
+
+                if (p.color === 'black') score += val; else score -= val;
             }
         }
         
-        // 반복 수 패널티 (이미 방문했던 보드 상태라면 점수 감점)
-        // 이 로직은 minimax 내부에서 처리하는 것이 더 정확하지만 여기서도 간단히 반영 가능
-        
+        score += (blackMobility - whiteMobility) * 5; // 활동성 가중치
         return score;
     }
 
+    // 정적인 상태까지 탐색 (포획이 끝날 때까지)
     function quiescenceSearch(b, alpha, beta, isMax) {
         let standPat = evaluateBoard(b);
         if (isMax) {
@@ -518,24 +484,25 @@
         }
     }
 
-    function getAllMoves(b, color) {
-        const ms = [];
+    function getAllMoves(b, color, depth = 0) {
+        let ms = [];
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
                 if (b[r][c] && b[r][c].color === color) {
                     getLegalMoves(r, c, b).forEach(m => {
                         let pri = 0;
-                        // 기물 잡기 우선순위 (MVV-LVA)
-                        if(m.capture) {
-                            pri = 100 * pieceValues[b[m.r][m.c].type] - pieceValues[b[r][c].type];
+                        // MVV-LVA (Most Valuable Victim - Least Valuable Aggressor) 기반 우선순위
+                        if (m.capture) {
+                            pri = 1000 + (pieceValues[b[m.r][m.c].type] * 10) - pieceValues[b[r][c].type];
                         }
-                        
-                        // 현재 보드 상태가 과거에 있었다면 점수 대폭 삭감 (무의미한 반복 방지)
-                        const hash = getBoardHash(simulateMove(r, c, m.r, m.c, m, b), color === 'black' ? 'white' : 'black');
-                        if (boardHistory[hash]) {
-                            pri -= 500 * boardHistory[hash]; 
+                        // 킬러 무브 가산점
+                        if (killerMoves[depth] && killerMoves[depth].some(km => km.fr === r && km.fc === c && km.tr === m.r && km.tc === m.c)) {
+                            pri += 500;
                         }
-                        
+                        // 히스토리 가산점
+                        const hKey = `${r}${c}${m.r}${m.c}`;
+                        pri += (historyTable[hKey] || 0);
+
                         ms.push({ fr: r, fc: c, tr: m.r, tc: m.c, to: m, priority: pri });
                     });
                 }
@@ -544,88 +511,85 @@
         return ms.sort((a, b) => b.priority - a.priority);
     }
 
-    function minimax(b, depth, alpha, beta, isMax) {
+    function minimax(b, depth, alpha, beta, isMax, initialDepth) {
         if (depth === 0) return quiescenceSearch(b, alpha, beta, isMax);
         
-        const ms = getAllMoves(b, isMax ? 'black' : 'white');
+        const ms = getAllMoves(b, isMax ? 'black' : 'white', initialDepth - depth);
         if (ms.length === 0) {
-            if (isCheck(isMax ? 'black' : 'white', b)) return isMax ? -30000 : 30000;
+            if (isCheck(isMax ? 'black' : 'white', b)) return isMax ? -30000 - depth : 30000 + depth;
             return 0;
         }
 
         if (isMax) {
             let maxEv = -Infinity;
             for (const m of ms) {
-                const ev = minimax(simulateMove(m.fr, m.fc, m.tr, m.tc, m.to, b), depth - 1, alpha, beta, false);
-                maxEv = Math.max(maxEv, ev);
+                const ev = minimax(simulateMove(m.fr, m.fc, m.tr, m.tc, m.to, b), depth - 1, alpha, beta, false, initialDepth);
+                if (ev > maxEv) {
+                    maxEv = ev;
+                    if (depth === initialDepth) bestMoveAtCurrentDepth = m;
+                }
                 alpha = Math.max(alpha, maxEv);
-                if (beta <= alpha) break;
+                if (beta <= alpha) {
+                    // 킬러 무브 기록
+                    if (!m.to.capture) {
+                        killerMoves[initialDepth - depth].push(m);
+                        if (killerMoves[initialDepth - depth].length > 2) killerMoves[initialDepth - depth].shift();
+                    }
+                    break;
+                }
             }
             return maxEv;
         } else {
             let minEv = Infinity;
             for (const m of ms) {
-                const ev = minimax(simulateMove(m.fr, m.fc, m.tr, m.tc, m.to, b), depth - 1, alpha, beta, true);
+                const ev = minimax(simulateMove(m.fr, m.fc, m.tr, m.tc, m.to, b), depth - 1, alpha, beta, true, initialDepth);
                 minEv = Math.min(minEv, ev);
                 beta = Math.min(beta, minEv);
-                if (beta <= alpha) break;
+                if (beta <= alpha) {
+                    const hKey = `${m.fr}${m.fc}${m.tr}${m.tc}`;
+                    historyTable[hKey] = (historyTable[hKey] || 0) + depth * depth;
+                    break;
+                }
             }
             return minEv;
         }
     }
 
+    let bestMoveAtCurrentDepth = null;
+
     async function makeBestMove() {
         if (gameOver) return;
-        const pms = getAllMoves(board, 'black');
-        if (pms.length === 0) { checkGameOver(); return; }
-        statusEl.innerText = "최적의 경로 계산 중...";
         
-        let bestS = -Infinity;
-        let bestMoves = [];
+        const startTime = Date.now();
+        statusEl.innerText = "상급 전술 분석 중...";
         
-        let pieceCount = 0;
-        board.forEach(row => row.forEach(p => { if(p) pieceCount++; }));
-        const searchDepth = pieceCount < 10 ? 4 : (pieceCount < 16 ? 3 : 2);
+        let pc = 0; board.forEach(row => row.forEach(p => p && pc++));
+        const maxDepth = pc < 8 ? 5 : 4; // 기물이 적을수록 더 깊게 탐색
 
-        for (let i = 0; i < pms.length; i++) {
-            const ev = minimax(simulateMove(pms[i].fr, pms[i].fc, pms[i].tr, pms[i].tc, pms[i].to, board), searchDepth, -Infinity, Infinity, false);
+        let globalBestMove = null;
+
+        // Iterative Deepening (점진적 심화)
+        for (let d = 1; d <= maxDepth; d++) {
+            bestMoveAtCurrentDepth = null;
+            minimax(board, d, -Infinity, Infinity, true, d);
+            if (bestMoveAtCurrentDepth) globalBestMove = bestMoveAtCurrentDepth;
             
-            if (ev > bestS) {
-                bestS = ev;
-                bestMoves = [pms[i]];
-            } else if (ev === bestS) {
-                bestMoves.push(pms[i]);
-            }
-            thinkingBar.style.width = `${((i+1) / pms.length) * 100}%`;
-            
-            // UI 업데이트를 위한 비동기 휴식 (너무 빠르면 안보임)
-            if (i % 5 === 0) await new Promise(r => setTimeout(r, 0));
+            thinkingBar.style.width = `${(d / maxDepth) * 100}%`;
+            // 시간 제한 체크 (0.5초 이상 소요 시 중단 가능)
+            if (Date.now() - startTime > 1500) break; 
+            await new Promise(r => setTimeout(r, 0));
         }
         
         thinkingBar.style.width = "0%";
-        const bestM = bestMoves[Math.floor(Math.random() * bestMoves.length)];
-        if (bestM) {
-            addLog(`흑색: ${String.fromCharCode(97+bestM.fc)}${8-bestM.fr} → ${String.fromCharCode(97+bestM.tc)}${8-bestM.tr}`);
-            executeMove(bestM.fr, bestM.fc, bestM.tr, bestM.tc, bestM.to);
+        
+        if (globalBestMove) {
+            const move = globalBestMove;
+            const notation = `${String.fromCharCode(97+move.fc)}${8-move.fr} → ${String.fromCharCode(97+move.tc)}${8-move.tr}`;
+            addLog(`흑색: ${notation}`, "black");
+            executeMove(move.fr, move.fc, move.tr, move.tc, move.to);
+        } else {
+            checkGameOver();
         }
-    }
-
-    function checkGameOver() {
-        const currentHash = getBoardHash(board, turn);
-        if (boardHistory[currentHash] >= 3) {
-            gameOver = true;
-            addLog("게임 종료: 무의미한 반복으로 인한 무승부");
-            setTimeout(() => alert("3회 반복으로 인한 무승부입니다."), 100);
-            return true;
-        }
-        if (getAllMoves(board, turn).length === 0) {
-            gameOver = true;
-            const msg = isCheck(turn, board) ? `체크메이트! ${turn === 'white' ? '흑' : '백'} 승리` : "스테일메이트 (무승부)";
-            addLog(`게임 종료: ${msg}`);
-            setTimeout(() => alert(msg), 100);
-            return true;
-        }
-        return false;
     }
 
     function executeMove(fr, fc, tr, tc, m) {
@@ -639,7 +603,6 @@
         
         board[tr][tc] = p; board[tr][tc].moved = true; board[fr][fc] = null;
         
-        // 보드 역사 기록 (반복수 감지용)
         const hash = getBoardHash(board, turn === 'white' ? 'black' : 'white');
         boardHistory[hash] = (boardHistory[hash] || 0) + 1;
         
@@ -649,28 +612,46 @@
         } else { nextTurn(); }
     }
 
+    function checkGameOver() {
+        const currentHash = getBoardHash(board, turn);
+        if (boardHistory[currentHash] >= 3) {
+            gameOver = true; addLog("무승부: 3회 반복", "white");
+            statusEl.innerText = "게임 종료 (무승부)";
+            return true;
+        }
+        if (getAllMoves(board, turn).length === 0) {
+            gameOver = true;
+            const inCheck = isCheck(turn, board);
+            const msg = inCheck ? `${turn === 'white' ? '흑' : '백'} 승리 (체크메이트)` : "무승부 (스테일메이트)";
+            addLog(`게임 종료: ${msg}`, "white");
+            statusEl.innerText = msg;
+            return true;
+        }
+        return false;
+    }
+
     function nextTurn() {
         turn = turn === 'white' ? 'black' : 'white';
         if (turn === 'white') turnCounter++;
         updateUI(); draw();
-        if(!checkGameOver()) {
-            if (turn === 'black') setTimeout(makeBestMove, 300);
-        }
+        if (!checkGameOver() && turn === 'black') setTimeout(makeBestMove, 100);
     }
 
     function updateUI() {
-        document.getElementById('turn-count').innerText = `턴 ${turnCounter}`;
+        document.getElementById('turn-count').innerText = `ROUND ${turnCounter}`;
         document.getElementById('p1-info').classList.toggle('active-turn', turn === 'white');
         document.getElementById('p2-info').classList.toggle('active-turn', turn === 'black');
-        statusEl.innerText = isCheck(turn, board) ? "⚠️ 위기! 체크 상태" : (turn === 'white' ? "전술을 선택하세요" : "AI가 최선의 수를 찾는 중...");
+        if (!gameOver) {
+            statusEl.innerText = isCheck(turn, board) ? "⚠️ 체크 위기!" : (turn === 'white' ? "당신의 차례입니다" : "AI 엔진 분석 중...");
+        }
     }
 
     function showPromotion(r, c) {
         pendingPromotion = { r, c };
         const list = document.getElementById('promo-list'); list.innerHTML = '';
         ['queen', 'rook', 'bishop', 'knight'].forEach(t => {
-            const btn = document.createElement('button'); btn.className = 'promo-btn';
-            btn.innerHTML = piecesEmoji.white[t];
+            const btn = document.createElement('button'); btn.className = 'faction-btn';
+            btn.style.width = '70px'; btn.innerHTML = piecesEmoji.white[t];
             btn.onclick = () => {
                 board[r][c].type = t;
                 document.getElementById('promotion-overlay').style.display = 'none';
@@ -689,6 +670,8 @@
         const move = validMoves.find(m => m.r === r && m.c === c);
         
         if (selectedTile && move) {
+            const notation = `${String.fromCharCode(97+selectedTile.c)}${8-selectedTile.r} → ${String.fromCharCode(97+c)}${8-r}`;
+            addLog(`백색: ${notation}`, "white");
             executeMove(selectedTile.r, selectedTile.c, r, c, move);
             selectedTile = null; validMoves = [];
         } else if (board[r][c] && board[r][c].color === 'white') {
