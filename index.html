@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>정엽 체스 - 상급자 전술 엔진 v2</title>
+    <title>정체</title>
     <style>
         :root {
             --bg-color: #121212;
@@ -561,7 +561,7 @@
         if (gameOver) return;
         
         const startTime = Date.now();
-        statusEl.innerText = "상급 전술 분석 중...";
+        statusEl.innerText = "전술 분석 중...";
         
         let pc = 0; board.forEach(row => row.forEach(p => p && pc++));
         const maxDepth = pc < 8 ? 5 : 4; // 기물이 적을수록 더 깊게 탐색
