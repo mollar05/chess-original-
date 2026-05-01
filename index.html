@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>정엽 체스 - Stockfish 최강 엔진</title>
+    <title>정스</title>
     <style>
         :root {
             --bg-color: #121212;
@@ -136,19 +136,11 @@
             position: absolute; bottom: 0; left: 0; width: 100%; height: 4px; background: rgba(255,255,255,0.1);
         }
         #thinking-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.1s; }
-    #sf-status {
-        font-size: 0.75rem; color: #888; text-align: center; padding: 4px 0;
-    }
-    #sf-status.ready { color: #4caf50; }
-    #sf-status.error { color: #ff5555; }
     </style>
-    <!-- Stockfish via unpkg (GitHub Pages HTTPS에서 정상 동작) -->
-    <script src="https://unpkg.com/stockfish@16.0.0/src/stockfish-nnue-16-single.js"></script>
 </head>
 <body>
 
-<div id="status-msg">정엽 체스: Stockfish 엔진 로딩 중...</div>
-<div id="sf-status">⏳ Stockfish 초기화 중...</div>
+<div id="status-msg">정스: AI 엔진 준비 완료</div>
 
 <div id="main-layout">
     <div id="game-section">
@@ -176,9 +168,9 @@
     <div class="box">
         <h2 style="margin-top:0; color:var(--accent);">세력 선택</h2>
         <p style="color:#aaa; margin-bottom:20px;">특수 능력을 가진 세력을 선택하세요.</p>
-        <button class="faction-btn pro" onclick="selectFaction('pro')">친 정엽파 (이동 자유)</button>
-        <button class="faction-btn anti" onclick="selectFaction('anti')">반 정엽파 (폰 사거리)</button>
-        <button class="faction-btn neutral" onclick="selectFaction('neutral')">중립파 (오리지널)</button>
+        <button class="faction-btn pro" onclick="selectFaction('pro')">정파 (이동 자유)</button>
+        <button class="faction-btn anti" onclick="selectFaction('anti')">반파 (폰 사거리)</button>
+        <button class="faction-btn neutral" onclick="selectFaction('neutral')">중파 (오리지널)</button>
     </div>
 </div>
 
@@ -194,86 +186,7 @@
     const ctx = canvas.getContext('2d');
     const logEl = document.getElementById('log');
     const statusEl = document.getElementById('status-msg');
-    const sfStatusEl = document.getElementById('sf-status');
     const thinkingBar = document.getElementById('thinking-bar');
-
-    // ── Stockfish 엔진 ──────────────────────────────────────────
-    let sf = null;
-    let sfReady = false;
-    let sfResolve = null;
-
-    function initStockfish() {
-        // 방법 1: CDN 스크립트로 로드된 경우
-        try {
-            if (typeof STOCKFISH === 'function') sf = STOCKFISH();
-            else if (typeof Stockfish === 'function') sf = Stockfish();
-            else if (typeof stockfish === 'function') sf = stockfish();
-        } catch(e) { sf = null; }
-
-        // 방법 2: Worker로 CDN URL 직접 로드
-        if (!sf) {
-            try {
-                const workerUrl = 'https://unpkg.com/stockfish@16.0.0/src/stockfish-nnue-16-single.js';
-                sf = new Worker(workerUrl);
-                sf.postMessage = (msg) => sf.postMessage(msg); // Worker는 postMessage 그대로
-                // Worker 메시지 리매핑
-                sf.onmessage = null;
-                sf.addEventListener('message', (e) => {
-                    if (sf._handler) sf._handler(e.data);
-                });
-                // onmessage setter 흉내
-                Object.defineProperty(sf, 'onmessage', {
-                    set(fn) { sf._handler = fn; },
-                    get() { return sf._handler; }
-                });
-            } catch(e2) { sf = null; }
-        }
-
-        if (!sf) {
-            sfStatusEl.textContent = '⚠️ Stockfish 로드 실패 → 내장 엔진 사용 중';
-            sfStatusEl.className = 'error';
-            return;
-        }
-
-        sf.onmessage = (line) => {
-            const msg = typeof line === 'string' ? line : (line.data || line);
-            if (msg === 'readyok') {
-                sfReady = true;
-                sfStatusEl.textContent = '✅ Stockfish 준비 완료 (최강 모드)';
-                sfStatusEl.className = 'ready';
-                statusEl.innerText = '정엽 체스: Stockfish 최강 엔진 탑재';
-            }
-            if (msg.startsWith('bestmove') && sfResolve) {
-                sfResolve(msg);
-                sfResolve = null;
-            }
-        };
-
-        try {
-            sf.postMessage('uci');
-            sf.postMessage('setoption name Hash value 128');
-            sf.postMessage('isready');
-        } catch(e) {
-            sf = null;
-            sfStatusEl.textContent = '⚠️ Stockfish 로드 실패 → 내장 엔진 사용 중';
-            sfStatusEl.className = 'error';
-        }
-    }
-
-    // Stockfish에 FEN 전달 후 bestmove 수신
-    function askStockfish(fen, moveHistory) {
-        return new Promise((resolve) => {
-            sfResolve = resolve;
-            sf.postMessage('ucinewgame');
-            if (moveHistory && moveHistory.length > 0) {
-                sf.postMessage(`position fen ${fen} moves ${moveHistory.join(' ')}`);
-            } else {
-                sf.postMessage(`position fen ${fen}`);
-            }
-            // 깊이 20, 최대 3초 — 초고수도 못 이기는 수준
-            sf.postMessage('go depth 20 movetime 3000');
-        });
-    }
 
     // ── 게임 상태 ───────────────────────────────────────────────
 
@@ -511,141 +424,268 @@
         return nb;
     }
 
-    // AI 엔진 로직 - 강화 버전
+    // ── 공격받는 기물 탐지 (상대가 자주 쓰는 기물 타겟팅용) ──
+    function getHangingPieces(b, color) {
+        // color 진영에서 공격받고 있으나 수비가 부족한 기물 목록 반환
+        const opp = color === 'white' ? 'black' : 'white';
+        const hanging = [];
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const p = b[r][c];
+                if (!p || p.color !== color) continue;
+                if (isSquareAttacked(color, b, r, c)) {
+                    // 수비자 수 < 공격자 수이면 hanging
+                    const defenders = countAttackers(b, color, r, c);
+                    const attackers = countAttackers(b, opp, r, c);
+                    if (attackers > defenders) hanging.push({ r, c, val: pieceValues[p.type] });
+                }
+            }
+        }
+        return hanging;
+    }
+
+    function countAttackers(b, color, tr, tc) {
+        let cnt = 0;
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                if (b[r][c] && b[r][c].color === color) {
+                    const ms = getRawMoves(r, c, b, true);
+                    if (ms.some(m => m.r === tr && m.c === tc)) cnt++;
+                }
+            }
+        }
+        return cnt;
+    }
+
+    // ── 강화된 평가 함수 ──────────────────────────────────────
     function evaluateBoard(b) {
         let score = 0;
         let whitePieces = 0, blackPieces = 0;
         let whitePawnCols = Array(8).fill(0), blackPawnCols = Array(8).fill(0);
-        
-        // 1패스: 기물 수 및 폰 파일 집계
+        let whiteBishops = 0, blackBishops = 0;
+        let whiteMaterial = 0, blackMaterial = 0;
+
+        // 1패스: 집계
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
                 const p = b[r][c];
                 if (!p) continue;
-                if (p.color === 'white') { whitePieces++; if(p.type==='pawn') whitePawnCols[c]++; }
-                else { blackPieces++; if(p.type==='pawn') blackPawnCols[c]++; }
+                if (p.color === 'white') {
+                    whitePieces++;
+                    if (p.type === 'pawn') whitePawnCols[c]++;
+                    if (p.type === 'bishop') whiteBishops++;
+                    if (p.type !== 'king' && p.type !== 'pawn') whiteMaterial += pieceValues[p.type];
+                } else {
+                    blackPieces++;
+                    if (p.type === 'pawn') blackPawnCols[c]++;
+                    if (p.type === 'bishop') blackBishops++;
+                    if (p.type !== 'king' && p.type !== 'pawn') blackMaterial += pieceValues[p.type];
+                }
             }
         }
-        const isEndgame = (whitePieces + blackPieces < 14);
-        
-        // 2패스: 점수 계산
+        const totalPieces = whitePieces + blackPieces;
+        const isEndgame = totalPieces < 14;
+        const isMidgame = totalPieces >= 14 && totalPieces < 26;
+
+        // 2패스: 기물별 점수
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
                 const p = b[r][c];
                 if (!p) continue;
-                
+
                 let val = pieceValues[p.type];
-                let table;
-                if (p.type === 'king') table = isEndgame ? pst.kingEnd : pst.king;
-                else table = pst[p.type] || pst.pawn;
-                
-                val += (p.color === 'white' ? table[7-r][c] : table[r][c]);
-                
-                // 폰 구조 평가
+                let table = p.type === 'king' ? (isEndgame ? pst.kingEnd : pst.king) : (pst[p.type] || pst.pawn);
+                val += p.color === 'white' ? table[7-r][c] : table[r][c];
+
+                // ── 폰 구조 ──
                 if (p.type === 'pawn') {
-                    const pawnCols = p.color === 'white' ? whitePawnCols : blackPawnCols;
-                    const oppPawnCols = p.color === 'white' ? blackPawnCols : whitePawnCols;
-                    // 이중 폰 페널티
-                    if (pawnCols[c] > 1) val -= 20;
-                    // 고립 폰 페널티
-                    const isIsolated = (c === 0 || pawnCols[c-1] === 0) && (c === 7 || pawnCols[c+1] === 0);
-                    if (isIsolated) val -= 15;
-                    // 통과 폰 보너스
-                    let passed = true;
+                    const ownCols  = p.color === 'white' ? whitePawnCols : blackPawnCols;
+                    const oppCols  = p.color === 'white' ? blackPawnCols : whitePawnCols;
+                    if (ownCols[c] > 1) val -= 25;          // 이중 폰
+                    const isolated = (c===0||ownCols[c-1]===0) && (c===7||ownCols[c+1]===0);
+                    if (isolated) val -= 20;                  // 고립 폰
+                    // 통과 폰
                     const dir = p.color === 'white' ? -1 : 1;
-                    for (let pr = r + dir; pr >= 0 && pr < 8; pr += dir) {
-                        if ((c > 0 && oppPawnCols[c-1] > 0) || oppPawnCols[c] > 0 || (c < 7 && oppPawnCols[c+1] > 0)) { passed = false; break; }
+                    let passed = true;
+                    for (let pr = r+dir; pr>=0 && pr<8; pr+=dir) {
+                        if ((c>0&&oppCols[c-1]>0)||oppCols[c]>0||(c<7&&oppCols[c+1]>0)) { passed=false; break; }
                     }
                     if (passed) {
-                        const distToPromo = p.color === 'white' ? r : 7 - r;
-                        val += 30 + (7 - distToPromo) * 10;
+                        const dist = p.color==='white' ? r : 7-r;
+                        val += 40 + (7-dist)*15; // 통과 폰은 매우 위험
                     }
+                    // 연결 폰 보너스
+                    if (c>0&&ownCols[c-1]>0) val += 8;
+                    if (c<7&&ownCols[c+1]>0) val += 8;
                 }
-                
-                // 비숍 쌍 보너스 (나중에 추가)
-                // 룩 오픈 파일 보너스
+
+                // ── 룩: 오픈 파일, 7랭크 보너스 ──
                 if (p.type === 'rook') {
-                    const pawnCols = p.color === 'white' ? whitePawnCols : blackPawnCols;
-                    const oppPawnCols = p.color === 'white' ? blackPawnCols : whitePawnCols;
-                    if (pawnCols[c] === 0) val += oppPawnCols[c] === 0 ? 20 : 10;
+                    const ownCols = p.color==='white' ? whitePawnCols : blackPawnCols;
+                    const oppCols = p.color==='white' ? blackPawnCols : whitePawnCols;
+                    if (ownCols[c]===0) val += oppCols[c]===0 ? 25 : 15; // 오픈/세미오픈 파일
+                    const rank7 = p.color==='white' ? 1 : 6;
+                    if (r===rank7) val += 30; // 7랭크 룩
                 }
-                
-                // 킹 안전 (미들게임)
+
+                // ── 나이트: 아웃포스트 (상대 폰이 공격 못 하는 중앙 칸) ──
+                if (p.type === 'knight') {
+                    const centerBonus = [0,0,1,2,2,1,0,0];
+                    val += centerBonus[c] * 5 + centerBonus[r] * 5;
+                    // 상대 영역 깊숙이 위치할수록 보너스
+                    if (p.color==='black' && r>=4) val += (r-3)*8;
+                    if (p.color==='white' && r<=3) val += (4-r)*8;
+                }
+
+                // ── 비숍: 대각선 활동성 ──
+                if (p.type === 'bishop') {
+                    let mobility = getRawMoves(r, c, b, true).length;
+                    val += mobility * 3;
+                }
+
+                // ── 퀸: 너무 일찍 나오면 페널티 ──
+                if (p.type === 'queen' && isMidgame) {
+                    const developedPieces = p.color==='white'
+                        ? [b[7][1],b[7][2],b[7][5],b[7][6]].filter(x=>x&&x.type!=='knight'&&x.type!=='bishop').length
+                        : [b[0][1],b[0][2],b[0][5],b[0][6]].filter(x=>x&&x.type!=='knight'&&x.type!=='bishop').length;
+                    if (developedPieces > 1) val -= 15; // 다른 기물 먼저 개발
+                }
+
+                // ── 킹 안전 ──
                 if (p.type === 'king' && !isEndgame) {
-                    const pawnShield = p.color === 'white' ? whitePawnCols : blackPawnCols;
-                    const shieldRow = p.color === 'white' ? 6 : 1;
+                    const ownCols = p.color==='white' ? whitePawnCols : blackPawnCols;
                     let shield = 0;
-                    for (let sc = Math.max(0, c-1); sc <= Math.min(7, c+1); sc++) {
-                        if (pawnShield[sc] > 0) shield += 10;
+                    for (let sc=Math.max(0,c-1); sc<=Math.min(7,c+1); sc++) {
+                        if (ownCols[sc]>0) shield+=12;
                     }
                     val += shield;
+                    // 오픈 파일 킹 페널티
+                    const oppCols = p.color==='white' ? blackPawnCols : whitePawnCols;
+                    if (oppCols[c]===0) val -= 20;
                 }
-                
-                score += (p.color === 'black' ? val : -val);
+
+                // ── 헝잉(무방비) 기물 페널티 ──
+                if (p.type !== 'king' && p.type !== 'pawn') {
+                    const opp = p.color==='white' ? 'black' : 'white';
+                    if (isSquareAttacked(p.color, b, r, c)) {
+                        const def = countAttackers(b, p.color, r, c);
+                        const atk = countAttackers(b, opp, r, c);
+                        if (atk > def) val -= pieceValues[p.type] * 0.15; // 무방비면 페널티
+                    }
+                }
+
+                score += p.color==='black' ? val : -val;
             }
         }
-        
-        // 비숍 쌍 보너스
-        let whiteBishops = 0, blackBishops = 0;
-        for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-            if (b[r][c]) { if(b[r][c].color==='white'&&b[r][c].type==='bishop') whiteBishops++; else if(b[r][c].color==='black'&&b[r][c].type==='bishop') blackBishops++; }
+
+        // 비숍 쌍
+        if (blackBishops>=2) score += 40;
+        if (whiteBishops>=2) score -= 40;
+
+        // 기물 우위 + 엔드게임 킹 활성화 보너스
+        if (isEndgame) {
+            // 유리한 쪽 킹을 중앙으로
+            for (let r=0; r<8; r++) for (let c=0; c<8; c++) {
+                const p = b[r][c];
+                if (p && p.type==='king') {
+                    const centrality = -(Math.abs(3.5-r) + Math.abs(3.5-c));
+                    score += p.color==='black' ? centrality*5 : -centrality*5;
+                }
+            }
         }
-        if (blackBishops >= 2) score += 30;
-        if (whiteBishops >= 2) score -= 30;
-        
+
+        // ── 상대 강한 기물 타겟팅 보너스 ──
+        // AI(흑)가 백의 퀸/룩을 공격하고 있으면 보너스
+        for (let r=0; r<8; r++) {
+            for (let c=0; c<8; c++) {
+                const p = b[r][c];
+                if (!p || p.color!=='white') continue;
+                if (p.type==='queen'||p.type==='rook') {
+                    const atk = countAttackers(b,'black',r,c);
+                    const def = countAttackers(b,'white',r,c);
+                    if (atk>0) score += (p.type==='queen'?30:15) * Math.min(atk,2);
+                    if (atk>def) score += pieceValues[p.type]*0.1; // 실제로 딸 수 있으면 더
+                }
+            }
+        }
+
         return score;
     }
 
-    function quiescenceSearch(b, alpha, beta, isMax) {
+    // ── 퀴센스 서치: 체크도 포함 ──────────────────────────────
+    function quiescenceSearch(b, alpha, beta, isMax, qdepth = 0) {
         let standPat = evaluateBoard(b);
         if (isMax) {
             if (standPat >= beta) return beta;
             alpha = Math.max(alpha, standPat);
-            const captures = getAllMoves(b, 'black').filter(m => m.to.capture);
-            for (const m of captures) {
-                const score = quiescenceSearch(simulateMove(m.fr, m.fc, m.tr, m.tc, m.to, b), alpha, beta, false);
-                if (score >= beta) return beta;
-                alpha = Math.max(alpha, score);
+            // 캡처 + 체크 수만 탐색 (깊이 제한 4)
+            const moves = getAllMoves(b, 'black').filter(m => m.to.capture || (qdepth < 2 && isCheck('white', simulateMove(m.fr, m.fc, m.tr, m.tc, m.to, b))));
+            for (const m of moves) {
+                // Delta pruning: 잡아도 이득이 없으면 스킵
+                const gain = m.to.capture && b[m.tr][m.tc] ? pieceValues[b[m.tr][m.tc].type] : 0;
+                if (standPat + gain + 200 < alpha) continue;
+                const s = quiescenceSearch(simulateMove(m.fr, m.fc, m.tr, m.tc, m.to, b), alpha, beta, false, qdepth+1);
+                if (s >= beta) return beta;
+                alpha = Math.max(alpha, s);
             }
             return alpha;
         } else {
             if (standPat <= alpha) return alpha;
             beta = Math.min(beta, standPat);
-            const captures = getAllMoves(b, 'white').filter(m => m.to.capture);
-            for (const m of captures) {
-                const score = quiescenceSearch(simulateMove(m.fr, m.fc, m.tr, m.tc, m.to, b), alpha, beta, true);
-                if (score <= alpha) return alpha;
-                beta = Math.min(beta, score);
+            const moves = getAllMoves(b, 'white').filter(m => m.to.capture || (qdepth < 2 && isCheck('black', simulateMove(m.fr, m.fc, m.tr, m.tc, m.to, b))));
+            for (const m of moves) {
+                const gain = m.to.capture && b[m.tr][m.tc] ? pieceValues[b[m.tr][m.tc].type] : 0;
+                if (standPat - gain - 200 > beta) continue;
+                const s = quiescenceSearch(simulateMove(m.fr, m.fc, m.tr, m.tc, m.to, b), alpha, beta, true, qdepth+1);
+                if (s <= alpha) return alpha;
+                beta = Math.min(beta, s);
             }
             return beta;
         }
     }
 
+    // ── 강화된 이동 정렬: 상대 강한 기물 타겟 우선 ──────────
     function getAllMoves(b, color, depth = 0) {
+        const opp = color === 'white' ? 'black' : 'white';
+        // 상대 퀸/룩 위치 미리 파악
+        const highValueTargets = new Set();
+        for (let r=0; r<8; r++) for (let c=0; c<8; c++) {
+            const p = b[r][c];
+            if (p && p.color===opp && (p.type==='queen'||p.type==='rook')) highValueTargets.add(`${r}${c}`);
+        }
+
         let ms = [];
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
-                if (b[r][c] && b[r][c].color === color) {
-                    getLegalMoves(r, c, b).forEach(m => {
-                        let pri = 0;
-                        if (m.capture) {
-                            // MVV-LVA: 가치 높은 기물 잡기 우선, 낮은 기물로 잡기 우선
-                            const victimVal = b[m.r][m.c] ? pieceValues[b[m.r][m.c].type] : 0;
-                            const attackerVal = pieceValues[b[r][c].type];
-                            pri = 10000 + victimVal * 10 - attackerVal;
-                        } else {
-                            // killer move
-                            const km = killerMoves[depth];
-                            if (km && km[0] && km[0].fr===r && km[0].fc===c && km[0].tr===m.r && km[0].tc===m.c) pri = 9000;
-                            else if (km && km[1] && km[1].fr===r && km[1].fc===c && km[1].tr===m.r && km[1].tc===m.c) pri = 8000;
-                            else {
-                                const hkey = `${r}${c}${m.r}${m.c}${color}`;
-                                pri = historyTable[hkey] || 0;
+                if (!b[r][c] || b[r][c].color !== color) continue;
+                getLegalMoves(r, c, b).forEach(m => {
+                    let pri = 0;
+                    if (m.capture) {
+                        const victimVal = b[m.r][m.c] ? pieceValues[b[m.r][m.c].type] : 0;
+                        const attackerVal = pieceValues[b[r][c].type];
+                        pri = 20000 + victimVal * 10 - attackerVal;
+                        // 상대 퀸/룩 잡기 최우선
+                        if (highValueTargets.has(`${m.r}${m.c}`)) pri += 5000;
+                    } else {
+                        const km = killerMoves[depth];
+                        if (km&&km[0]&&km[0].fr===r&&km[0].fc===c&&km[0].tr===m.r&&km[0].tc===m.c) pri = 18000;
+                        else if (km&&km[1]&&km[1].fr===r&&km[1].fc===c&&km[1].tr===m.r&&km[1].tc===m.c) pri = 17000;
+                        else {
+                            const hkey = `${r}${c}${m.r}${m.c}${color}`;
+                            pri = historyTable[hkey] || 0;
+                            // 체크 수 보너스
+                            if (isCheck(opp, simulateMove(r, c, m.r, m.c, m, b))) pri += 3000;
+                            // 상대 고가 기물 공격 포지션으로 이동
+                            if (highValueTargets.size > 0) {
+                                const myMoves = getRawMoves(m.r, m.c, b, true);
+                                for (const mm of myMoves) {
+                                    if (highValueTargets.has(`${mm.r}${mm.c}`)) { pri += 1500; break; }
+                                }
                             }
                         }
-                        ms.push({ fr: r, fc: c, tr: m.r, tc: m.c, to: m, priority: pri });
-                    });
-                }
+                    }
+                    ms.push({ fr: r, fc: c, tr: m.r, tc: m.c, to: m, priority: pri });
+                });
             }
         }
         return ms.sort((a, b) => b.priority - a.priority);
@@ -733,110 +773,16 @@
 
     let bestMoveAtCurrentDepth = null;
 
-    // ── FEN / UCI 변환 ──────────────────────────────────────────
-    const fenPiece = { king:'k', queen:'q', rook:'r', bishop:'b', knight:'n', pawn:'p' };
-    const colLetter = ['a','b','c','d','e','f','g','h'];
-
-    function boardToFen() {
-        let fen = '';
-        for (let r = 0; r < 8; r++) {
-            let empty = 0;
-            for (let c = 0; c < 8; c++) {
-                const p = board[r][c];
-                if (!p) { empty++; }
-                else {
-                    if (empty) { fen += empty; empty = 0; }
-                    const ch = fenPiece[p.type];
-                    fen += p.color === 'white' ? ch.toUpperCase() : ch;
-                }
-            }
-            if (empty) fen += empty;
-            if (r < 7) fen += '/';
-        }
-        // 캐슬링 권리 계산
-        let castle = '';
-        if (board[7][4]&&!board[7][4].moved) {
-            if (board[7][7]&&!board[7][7].moved) castle += 'K';
-            if (board[7][0]&&!board[7][0].moved) castle += 'Q';
-        }
-        if (board[0][4]&&!board[0][4].moved) {
-            if (board[0][7]&&!board[0][7].moved) castle += 'k';
-            if (board[0][0]&&!board[0][0].moved) castle += 'q';
-        }
-        fen += ` ${turn === 'white' ? 'w' : 'b'} ${castle || '-'} - 0 ${turnCounter}`;
-        return fen;
-    }
-
-    // UCI 수 (예: e2e4) → {fr,fc,tr,tc} 변환
-    function uciToCoords(uci) {
-        const fc = uci.charCodeAt(0) - 97;
-        const fr = 8 - parseInt(uci[1]);
-        const tc = uci.charCodeAt(2) - 97;
-        const tr = 8 - parseInt(uci[3]);
-        const promo = uci[4] || null;
-        return { fr, fc, tr, tc, promo };
-    }
-
-    // 수를 UCI 형식으로 기록 (반복수 방지용)
-    function moveToUci(fr, fc, tr, tc, p) {
-        return colLetter[fc] + (8 - fr) + colLetter[tc] + (8 - tr);
-    }
-
     async function makeBestMove() {
         if (gameOver) return;
-        statusEl.innerText = "Stockfish가 생각 중...";
+        statusEl.innerText = "AI가 생각 중...";
 
-        // 반복수 방지: 현재 국면이 이미 2회 이상이면 다른 수 강제
+        if (Object.keys(transpositionTable).length > TT_SIZE) transpositionTable = {};
+
+        // 반복수 방지: 현재 국면 2회 이상이면 반복 수 제외
         const currentHash = getBoardHash(board, 'black');
         const isRepeating = (boardHistory[currentHash] || 0) >= 2;
 
-        if (sfReady) {
-            // ── Stockfish 경로 ──
-            try {
-                const fen = boardToFen();
-                const bestmoveMsg = await askStockfish(fen, []);
-                // "bestmove e2e4 ponder e7e5" 파싱
-                const parts = bestmoveMsg.split(' ');
-                const uci = parts[1];
-                if (!uci || uci === '(none)') { checkGameOver(); return; }
-
-                const { fr, fc, tr, tc, promo } = uciToCoords(uci);
-                const moveObj = getLegalMoves(fr, fc, board).find(m => m.r === tr && m.c === tc);
-                if (!moveObj) { checkGameOver(); return; }
-
-                // 반복수 방지: 같은 수가 반복되면 두 번째로 좋은 수 선택
-                const uciStr = moveToUci(fr, fc, tr, tc);
-                if (isRepeating && moveHistory.slice(-4).includes(uciStr)) {
-                    // Stockfish에 이미 반복된 수 제외 요청 (searchmoves 미지원시 fallback)
-                    const allMoves = getAllMoves(board, 'black');
-                    const nonRepeat = allMoves.filter(m => moveToUci(m.fr, m.fc, m.tr, m.tc) !== uciStr);
-                    if (nonRepeat.length > 0) {
-                        // 내장 엔진으로 반복 아닌 최선 수 탐색
-                        const saved = board.map(r => [...r]);
-                        let bestAlt = null, bestScore = -Infinity;
-                        for (const m of nonRepeat.slice(0, 20)) {
-                            const nb = simulateMove(m.fr, m.fc, m.tr, m.tc, m.to, board);
-                            const s = -evaluateBoard(nb);
-                            if (s > bestScore) { bestScore = s; bestAlt = m; }
-                        }
-                        if (bestAlt) {
-                            const altMove = getLegalMoves(bestAlt.fr, bestAlt.fc, board).find(mv => mv.r === bestAlt.tr && mv.c === bestAlt.tc);
-                            if (altMove) { executeMove(bestAlt.fr, bestAlt.fc, bestAlt.tr, bestAlt.tc, altMove); return; }
-                        }
-                    }
-                }
-
-                moveHistory.push(uciStr);
-                if (promo) moveObj.promo = promo;
-                executeMove(fr, fc, tr, tc, moveObj);
-                return;
-            } catch(e) {
-                // Stockfish 실패시 내장 엔진 fallback
-            }
-        }
-
-        // ── 내장 엔진 fallback ──
-        if (Object.keys(transpositionTable).length > TT_SIZE) transpositionTable = {};
         let pc = 0; board.forEach(row => row.forEach(p => p && pc++));
         const targetDepth = pc < 8 ? 8 : pc < 14 ? 7 : 6;
         let finalBestMove = null;
@@ -851,17 +797,19 @@
 
         thinkingBar.style.width = "0%";
 
-        // 반복수 방지 (내장 엔진)
+        // 반복수 방지: 최근 4수 안에 같은 수가 있으면 다음 최선 수로
         if (finalBestMove && isRepeating) {
-            const uciStr = moveToUci(finalBestMove.fr, finalBestMove.fc, finalBestMove.tr, finalBestMove.tc);
-            if (moveHistory.slice(-4).includes(uciStr)) {
-                const allMoves = getAllMoves(board, 'black').filter(m => moveToUci(m.fr, m.fc, m.tr, m.tc) !== uciStr);
+            const key = `${finalBestMove.fr}${finalBestMove.fc}${finalBestMove.tr}${finalBestMove.tc}`;
+            if (moveHistory.slice(-4).includes(key)) {
+                const allMoves = getAllMoves(board, 'black').filter(
+                    m => `${m.fr}${m.fc}${m.tr}${m.tc}` !== key
+                );
                 if (allMoves.length > 0) finalBestMove = allMoves[0];
             }
         }
 
         if (finalBestMove) {
-            moveHistory.push(moveToUci(finalBestMove.fr, finalBestMove.fc, finalBestMove.tr, finalBestMove.tc));
+            moveHistory.push(`${finalBestMove.fr}${finalBestMove.fc}${finalBestMove.tr}${finalBestMove.tc}`);
             executeMove(finalBestMove.fr, finalBestMove.fc, finalBestMove.tr, finalBestMove.tc, finalBestMove.to);
         } else {
             checkGameOver();
@@ -955,7 +903,7 @@
     });
 
     window.addEventListener('resize', resize);
-    window.onload = () => { resize(); initStockfish(); };
+    window.onload = () => { resize(); };
 </script>
 </body>
 </html>
